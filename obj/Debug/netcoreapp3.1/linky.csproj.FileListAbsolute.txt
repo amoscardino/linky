@@ -1,0 +1,15 @@
+C:\Projects\linky\bin\Debug\netcoreapp3.1\linky.exe
+C:\Projects\linky\bin\Debug\netcoreapp3.1\linky.deps.json
+C:\Projects\linky\bin\Debug\netcoreapp3.1\linky.runtimeconfig.json
+C:\Projects\linky\bin\Debug\netcoreapp3.1\linky.runtimeconfig.dev.json
+C:\Projects\linky\bin\Debug\netcoreapp3.1\linky.dll
+C:\Projects\linky\bin\Debug\netcoreapp3.1\linky.pdb
+C:\Projects\linky\obj\Debug\netcoreapp3.1\linky.csprojAssemblyReference.cache
+C:\Projects\linky\obj\Debug\netcoreapp3.1\linky.AssemblyInfoInputs.cache
+C:\Projects\linky\obj\Debug\netcoreapp3.1\linky.AssemblyInfo.cs
+C:\Projects\linky\obj\Debug\netcoreapp3.1\linky.dll
+C:\Projects\linky\obj\Debug\netcoreapp3.1\linky.pdb
+C:\Projects\linky\bin\Debug\netcoreapp3.1\HtmlAgilityPack.dll
+C:\Projects\linky\bin\Debug\netcoreapp3.1\McMaster.Extensions.CommandLineUtils.dll
+C:\Projects\linky\bin\Debug\netcoreapp3.1\System.Xml.XPath.XmlDocument.dll
+C:\Projects\linky\obj\Debug\netcoreapp3.1\linky.csproj.CopyComplete
