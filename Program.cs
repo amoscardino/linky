@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net.Http;
+using System.Reflection;
 using McMaster.Extensions.CommandLineUtils;
 
 namespace Linky
@@ -10,6 +11,8 @@ namespace Linky
         {
             var app = new CommandLineApplication();
 
+            app.FullName = app.Name = "linky";
+            app.VersionOptionFromAssemblyAttributes(Assembly.GetExecutingAssembly());
             app.HelpOption();
 
             var urlArgument = app.Argument<string>("url",
@@ -23,12 +26,17 @@ namespace Linky
                                                    "Recursively follow links on the root URL.",
                                                    CommandOptionType.NoValue);
 
+            var verboseOption = app.Option<bool>("-v|--verbose",
+                                                 "Output all links, not just those that error.",
+                                                 CommandOptionType.NoValue);
+
             app.OnExecuteAsync(async _ =>
             {
                 var rootUrl = urlArgument.ParsedValue;
                 var recursive = recursiveOption.HasValue();
+                var verbose = verboseOption.HasValue();
 
-                var parser = new Parser(rootUrl, recursive, new HttpClient());
+                var parser = new Parser(rootUrl, recursive, verbose, new HttpClient());
 
                 await parser.ParseAsync(rootUrl);
             });

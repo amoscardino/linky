@@ -12,18 +12,20 @@ namespace Linky
         private HttpClient _http;
         private string _rootUrl;
         private bool _recurse;
+        private bool _verbose;
 
-        public Parser(string rootUrl, bool recurse, HttpClient http)
+        public Parser(string rootUrl, bool recurse, bool verbose, HttpClient http)
         {
-            _rootUrl = new Uri(rootUrl).GetLeftPart(UriPartial.Authority);
+            _rootUrl = new Uri(CleanUrl(rootUrl)).GetLeftPart(UriPartial.Authority);
             _recurse = recurse;
+            _verbose = verbose;
             _http = http;
         }
 
         public async Task ParseAsync(string startingUrl)
         {
             var urls = new Dictionary<string, int>();
-            urls.Add(startingUrl, 0);
+            urls.Add(CleanUrl(startingUrl), 0);
 
             while (urls.Any(x => x.Value == 0))
             {
@@ -59,10 +61,19 @@ namespace Linky
 
                     if (response.IsSuccessStatusCode)
                     {
-                        // Clear the current line
-                        Console.SetCursorPosition(0, Console.CursorTop);
-                        Console.Write(new string(' ', Console.BufferWidth - 1));
-                        Console.SetCursorPosition(0, Console.CursorTop);
+                        if (_verbose)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine($" [{(int)response.StatusCode}]");
+                            Console.ResetColor();
+                        }
+                        else
+                        {
+                            // Clear the current line
+                            Console.SetCursorPosition(0, Console.CursorTop);
+                            Console.Write(new string(' ', Console.BufferWidth - 1));
+                            Console.SetCursorPosition(0, Console.CursorTop);
+                        }
                     }
                     else
                     {
@@ -129,9 +140,8 @@ namespace Linky
                 .Cast<HtmlNode>()
                 .Select(link => link.Attributes["href"])
                 .Cast<HtmlAttribute>()
-                .Where(link => !string.IsNullOrWhiteSpace(link.Value))
                 .Select(link => CleanUrl(link.Value))
-                .Where(url => url.StartsWith("http"))
+                .Where(url => !string.IsNullOrWhiteSpace(url))
                 .ToList();
         }
 
@@ -139,11 +149,17 @@ namespace Linky
         {
             url = (url ?? string.Empty).Trim();
 
+            if (string.IsNullOrWhiteSpace(url) || url.StartsWith("#"))
+                return string.Empty;
+
             if (url.StartsWith("//"))
                 url = $"https:{url}";
 
             if (url.StartsWith("/"))
                 url = $"{_rootUrl}{url}";
+
+            if (!url.StartsWith("http"))
+                url = $"https://{url}";
 
             url = url.TrimEnd('/');
 
