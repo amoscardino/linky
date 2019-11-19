@@ -24,12 +24,15 @@ To install:
 ## Usage
 
 ```cmd
-> linky URL
+> linky URL [OPTIONS]
 ```
 
-You call Linky with a URL, which should include `http` or `https` at the beginning. Trailing slashes are fine.
+You call Linky with a URL. If the URL doesn't include a protocol, `https://` will be used.
+
+Example: `linky moscardino.net -r`
 
 ### Options
 
 - `-r` or `--recursive` - If Linky encounters a link with the same root URL as the argument URL, then Linky will download and parse that URL as well. It will skip URLs that have already been scanned.
-
+- `-v` or `--verbose` - Outputs all links to the console instead of just the ones that failed.
+- `-?` or `-h` or `--help` - Shows the help page.
