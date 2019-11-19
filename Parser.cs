@@ -27,11 +27,17 @@ namespace Linky
 
             while (urls.Any(x => x.Value == 0))
             {
+                // Grab any URLs from the dictionary that we have not checked. If we are recursing,
+                // new URLs will be added with a status code of 0 and we will pick them up on the
+                // next pass.
                 var urlsToProcess = urls.Where(x => x.Value == 0).Select(x => x.Key).ToList();
 
                 foreach (var url in urlsToProcess)
                 {
-                    Console.Write(url);
+                    var displayUrl = url.Length > (Console.BufferWidth - 10)
+                        ? $"{url.Substring(0, Console.BufferWidth - 10)}..."
+                        : url;
+                    Console.Write(displayUrl);
 
                     var response = (HttpResponseMessage)null;
 
@@ -51,31 +57,44 @@ namespace Linky
 
                     urls[url] = (int)response.StatusCode;
 
-                    Console.ForegroundColor = response.IsSuccessStatusCode ? ConsoleColor.Green : ConsoleColor.Red;
-                    Console.WriteLine($" [{(int)response.StatusCode}]");
-                    Console.ResetColor();
+                    if (response.IsSuccessStatusCode)
+                    {
+                        // Clear the current line
+                        Console.SetCursorPosition(0, Console.CursorTop);
+                        Console.Write(new string(' ', Console.BufferWidth - 1));
+                        Console.SetCursorPosition(0, Console.CursorTop);
+                    }
+                    else
+                    {
+                        // Write the error code and exit the loop early
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($" [{(int)response.StatusCode}]");
+                        Console.ResetColor();
+                        continue;
+                    }
 
-                    if (!response.IsSuccessStatusCode)
+                    // Exit early if we are not recursing unless we are checking the starting URL
+                    if (!_recurse && url != startingUrl)
                         continue;
 
-                    if (urls.Count == 1 || _recurse)
+                    // Exit early if the URL is external or if the content is not HTML
+                    if (!IsInternalUrl(url) || !response.Content.Headers.ContentType.MediaType.StartsWith("text/html"))
+                        continue;
+
+                    try
                     {
-                        if (!IsInternalUrl(url))
-                            continue;
+                        // If we made it this far, we will parse the HTML for links
+                        var html = await response.Content.ReadAsStringAsync();
 
-                        if (!response.Content.Headers.ContentType.MediaType.StartsWith("text/html"))
-                            continue;
-
-                        try
-                        {
-                            var html = await response.Content.ReadAsStringAsync();
-
-                            GetUrlsFromHtml(html).ForEach(x => urls.TryAdd(x, 0));
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"\tUnable to parse HTML.");
-                        }
+                        // We add each link to the dictionary with a status code of 0. Since
+                        // we are using a dictionary, URLs that are already checked or slated
+                        // to be checked will be ignored.
+                        GetUrlsFromHtml(html).ForEach(x => urls.TryAdd(x, 0));
+                    }
+                    catch
+                    {
+                        Console.WriteLine(url);
+                        Console.WriteLine($"\tUnable to parse HTML.");
                     }
                 }
             }
@@ -86,6 +105,7 @@ namespace Linky
             var htmlDoc = new HtmlDocument();
             htmlDoc.LoadHtml(html);
 
+            // Handle redirects done through a meta tag by returning that URL to be parsed next.
             var metaRefresh = htmlDoc.DocumentNode.SelectSingleNode("//meta[@http-equiv=\"refresh\"]");
 
             if (metaRefresh != null)
