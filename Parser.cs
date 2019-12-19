@@ -2,30 +2,50 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
+using McMaster.Extensions.CommandLineUtils;
 
 namespace Linky
 {
-    public class Parser
+    [Command(Name = "linky")]
+    [HelpOption]
+    [VersionOptionFromMember(MemberName = "GetVersion")]
+    public class ParseCommand
     {
         private HttpClient _http;
         private string _rootUrl;
-        private bool _recurse;
-        private bool _verbose;
 
-        public Parser(string rootUrl, bool recurse, bool verbose, HttpClient http)
+        [Argument(0, "URL", "URL to scan.")]
+        public string StartingUrl { get; set; }
+
+        [Option("-r|--recursive", "Recursively follow links on the root URL.", CommandOptionType.NoValue)]
+        public bool Recurse { get; set; }
+
+        [Option("-v|--verbose", "Output all links, not just those that error.", CommandOptionType.NoValue)]
+        public bool Verbose { get; set; }
+
+        public ParseCommand()
         {
-            _rootUrl = new Uri(CleanUrl(rootUrl)).GetLeftPart(UriPartial.Authority);
-            _recurse = recurse;
-            _verbose = verbose;
-            _http = http;
+            // TODO: Figure out how to get DI working for this
+            _http = new HttpClient();
         }
 
-        public async Task ParseAsync(string startingUrl)
+        public async Task OnExecuteAsync(CommandLineApplication app)
         {
+            StartingUrl = CleanUrl(StartingUrl);
+
+            if (string.IsNullOrWhiteSpace(StartingUrl))
+            {
+                app.ShowHelp();
+                return;
+            }
+
+            _rootUrl = new Uri(StartingUrl).GetLeftPart(UriPartial.Authority);
+
             var urls = new Dictionary<string, int>();
-            urls.Add(CleanUrl(startingUrl), 0);
+            urls.Add(StartingUrl, 0);
 
             while (urls.Any(x => x.Value == 0))
             {
@@ -61,7 +81,7 @@ namespace Linky
 
                     if (response.IsSuccessStatusCode)
                     {
-                        if (_verbose)
+                        if (Verbose)
                         {
                             Console.ForegroundColor = ConsoleColor.Green;
                             Console.WriteLine($" [{(int)response.StatusCode}]");
@@ -85,7 +105,7 @@ namespace Linky
                     }
 
                     // Exit early if we are not recursing unless we are checking the starting URL
-                    if (!_recurse && url != startingUrl)
+                    if (!Recurse && url != StartingUrl)
                         continue;
 
                     // Exit early if the URL is external or if the content is not HTML
@@ -169,6 +189,14 @@ namespace Linky
         private bool IsInternalUrl(string url)
         {
             return !string.IsNullOrWhiteSpace(url) && url.StartsWith(_rootUrl);
+        }
+
+        private string GetVersion()
+        {
+            return typeof(ParseCommand)
+                .Assembly?
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                .InformationalVersion;
         }
     }
 }
