@@ -2,50 +2,29 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Reflection;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
-using McMaster.Extensions.CommandLineUtils;
 
 namespace Linky
 {
-    [Command(Name = "linky")]
-    [HelpOption]
-    [VersionOptionFromMember(MemberName = "GetVersion")]
-    public class ParseCommand
+    public class Parser
     {
-        private HttpClient _http;
         private string _rootUrl;
 
-        [Argument(0, "URL", "URL to scan.")]
-        public string StartingUrl { get; set; }
+        private readonly HttpClient _httpClient;
 
-        [Option("-r|--recursive", "Recursively follow links on the root URL.", CommandOptionType.NoValue)]
-        public bool Recurse { get; set; }
-
-        [Option("-v|--verbose", "Output all links, not just those that error.", CommandOptionType.NoValue)]
-        public bool Verbose { get; set; }
-
-        public ParseCommand()
+        public Parser(HttpClient httpClient)
         {
-            // TODO: Figure out how to get DI working for this
-            _http = new HttpClient();
+            _httpClient = httpClient;
         }
 
-        public async Task OnExecuteAsync(CommandLineApplication app)
+        public async Task ParseAsync(string startingUrl, bool recurse = false, bool verbose = false)
         {
-            StartingUrl = CleanUrl(StartingUrl);
-
-            if (string.IsNullOrWhiteSpace(StartingUrl))
-            {
-                app.ShowHelp();
-                return;
-            }
-
-            _rootUrl = new Uri(StartingUrl).GetLeftPart(UriPartial.Authority);
+            startingUrl = CleanUrl(startingUrl);
+            _rootUrl = new Uri(startingUrl).GetLeftPart(UriPartial.Authority);
 
             var urls = new Dictionary<string, int>();
-            urls.Add(StartingUrl, 0);
+            urls.Add(startingUrl, 0);
 
             while (urls.Any(x => x.Value == 0))
             {
@@ -65,7 +44,7 @@ namespace Linky
 
                     try
                     {
-                        response = await _http.GetAsync(url);
+                        response = await _httpClient.GetAsync(url);
                     }
                     catch (HttpRequestException ex)
                     {
@@ -81,7 +60,7 @@ namespace Linky
 
                     if (response.IsSuccessStatusCode)
                     {
-                        if (Verbose)
+                        if (verbose)
                         {
                             Console.ForegroundColor = ConsoleColor.Green;
                             Console.WriteLine($" [{(int)response.StatusCode}]");
@@ -105,7 +84,7 @@ namespace Linky
                     }
 
                     // Exit early if we are not recursing unless we are checking the starting URL
-                    if (!Recurse && url != StartingUrl)
+                    if (!recurse && url != startingUrl)
                         continue;
 
                     // Exit early if the URL is external or if the content is not HTML
@@ -189,14 +168,6 @@ namespace Linky
         private bool IsInternalUrl(string url)
         {
             return !string.IsNullOrWhiteSpace(url) && url.StartsWith(_rootUrl);
-        }
-
-        private string GetVersion()
-        {
-            return typeof(ParseCommand)
-                .Assembly?
-                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-                .InformationalVersion;
         }
     }
 }
