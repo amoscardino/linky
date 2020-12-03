@@ -9,7 +9,10 @@ namespace Linky
 {
     public class Parser
     {
+        private string _startingUrl;
         private string _rootUrl;
+        private bool _recurse;
+        private bool _verbose;
 
         private readonly HttpClient _httpClient;
 
@@ -20,11 +23,13 @@ namespace Linky
 
         public async Task ParseAsync(string startingUrl, bool recurse = false, bool verbose = false)
         {
-            startingUrl = CleanUrl(startingUrl);
-            _rootUrl = new Uri(startingUrl).GetLeftPart(UriPartial.Authority);
+            _startingUrl = CleanUrl(startingUrl);
+            _rootUrl = new Uri(_startingUrl).GetLeftPart(UriPartial.Authority);
+            _recurse = recurse;
+            _verbose = verbose;
 
             var urls = new Dictionary<string, int>();
-            urls.Add(startingUrl, 0);
+            urls.Add(_startingUrl, 0);
 
             while (urls.Any(x => x.Value == 0))
             {
@@ -34,80 +39,95 @@ namespace Linky
                 var urlsToProcess = urls.Where(x => x.Value == 0).Select(x => x.Key).ToList();
 
                 foreach (var url in urlsToProcess)
-                {
-                    var displayUrl = url.Length > (Console.BufferWidth - 10)
-                        ? $"{url.Substring(0, Console.BufferWidth - 10)}..."
-                        : url;
-                    Console.Write(displayUrl);
-
-                    var response = (HttpResponseMessage)null;
-
-                    try
-                    {
-                        response = await _httpClient.GetAsync(url);
-                    }
-                    catch (HttpRequestException ex)
-                    {
-                        urls[url] = -1;
-
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($" [{ex.Message}]");
-                        Console.ResetColor();
-                        continue;
-                    }
-
-                    urls[url] = (int)response.StatusCode;
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        if (verbose)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Green;
-                            Console.WriteLine($" [{(int)response.StatusCode}]");
-                            Console.ResetColor();
-                        }
-                        else
-                        {
-                            // Clear the current line
-                            Console.SetCursorPosition(0, Console.CursorTop);
-                            Console.Write(new string(' ', Console.BufferWidth - 1));
-                            Console.SetCursorPosition(0, Console.CursorTop);
-                        }
-                    }
-                    else
-                    {
-                        // Write the error code and exit the loop early
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($" [{(int)response.StatusCode}]");
-                        Console.ResetColor();
-                        continue;
-                    }
-
-                    // Exit early if we are not recursing unless we are checking the starting URL
-                    if (!recurse && url != startingUrl)
-                        continue;
-
-                    // Exit early if the URL is external or if the content is not HTML
-                    if (!IsInternalUrl(url) || !response.Content.Headers.ContentType.MediaType.StartsWith("text/html"))
-                        continue;
-
-                    try
-                    {
-                        // If we made it this far, we will parse the HTML for links
-                        var html = await response.Content.ReadAsStringAsync();
-
-                        // We add each link to the dictionary with a status code of 0. Since
-                        // we are using a dictionary, URLs that are already checked or slated
-                        // to be checked will be ignored.
-                        GetUrlsFromHtml(html).ForEach(x => urls.TryAdd(x, 0));
-                    }
-                    catch
-                    {
-                        Console.WriteLine(url);
-                        Console.WriteLine($"\tUnable to parse HTML.");
-                    }
-                }
+                    await ProcessUrlAsync(url, urls);
             }
+        }
+
+        private async Task ProcessUrlAsync(string url, Dictionary<string, int> urls)
+        {
+            DisplayUrl(url);
+
+            HttpResponseMessage response;
+
+            try
+            {
+                response = await _httpClient.GetAsync(url);
+            }
+            catch (HttpRequestException ex)
+            {
+                urls[url] = -1;
+
+                DisplayErrorCode(ex.Message);
+                return;
+            }
+
+            urls[url] = (int)response.StatusCode;
+
+            if (response.IsSuccessStatusCode)
+                DisplaySuccessCode(urls[url]);
+            else
+            {
+                // Write the error code and exit the loop early
+                DisplayErrorCode(urls[url].ToString());
+                return;
+            }
+
+            // Exit early if we are not recursing unless we are checking the starting URL
+            if (!_recurse && url != _startingUrl)
+                return;
+
+            // Exit early if the URL is external or if the content is not HTML
+            if (!IsInternalUrl(url) || !response.Content.Headers.ContentType.MediaType.StartsWith("text/html"))
+                return;
+
+            try
+            {
+                // If we made it this far, we will parse the HTML for links
+                var html = await response.Content.ReadAsStringAsync();
+
+                // We add each link to the dictionary with a status code of 0. Since
+                // we are using a dictionary, URLs that are already checked or slated
+                // to be checked will be ignored.
+                GetUrlsFromHtml(html).ForEach(x => urls.TryAdd(x, 0));
+            }
+            catch
+            {
+                Console.WriteLine(url);
+                Console.WriteLine($"\tUnable to parse HTML.");
+            }
+        }
+
+        private void DisplayUrl(string url)
+        {
+            var displayUrl = url.Length > (Console.BufferWidth - 10)
+                ? $"{url.Substring(0, Console.BufferWidth - 10)}..."
+                : url;
+
+            Console.Write(displayUrl);
+        }
+
+        private void DisplaySuccessCode(int statusCode)
+        {
+            if (_verbose)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($" [{statusCode}]");
+                Console.ResetColor();
+            }
+            else
+            {
+                // Clear the current line
+                Console.SetCursorPosition(0, Console.CursorTop);
+                Console.Write(new string(' ', Console.BufferWidth - 1));
+                Console.SetCursorPosition(0, Console.CursorTop);
+            }
+        }
+
+        private void DisplayErrorCode(string errorCode)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($" [{errorCode}]");
+            Console.ResetColor();
         }
 
         private List<string> GetUrlsFromHtml(string html)
